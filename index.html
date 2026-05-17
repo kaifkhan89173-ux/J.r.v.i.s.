@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<title>Prop Hunt 3D — Custom Map & Trees</title>
+<title>Prop Hunt 3D — Custom Character & Map</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 body{background:#000;overflow:hidden;font-family:'Segoe UI',Arial,sans-serif;user-select:none;}
@@ -90,7 +90,7 @@ canvas{display:block;touch-action:none;}
 <div id="screen">
   <div id="menu">
     <h1>PROP HUNT</h1>
-    <div class="subtitle">3D Hide &amp; Seek (Armenia Map)</div>
+    <div class="subtitle">3D Hide &amp; Seek (Anime Character)</div>
     <div class="desc">Hiders disguise as environment props.<br>Seekers hunt down the hidden players.<br>Can you blend in — or will you be found?</div>
     <div class="role-row">
       <div class="role-card sel-hider" id="card-hider" onclick="selectRole('hider')">
@@ -191,7 +191,6 @@ canvas{display:block;touch-action:none;}
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-// --- ATTACH GLOBAL FUNCTIONS FOR HTML ONCLICK EVENTS ---
 window.selectRole = selectRole;
 window.startGame = startGame;
 window.showMenu = showMenu;
@@ -207,13 +206,12 @@ function selectRole(r){
   else{grid.innerHTML=`<span>⬆️ WASD / Arrows</span><span>Move</span><span>📷 Right Swipe / Mouse</span><span>Camera</span><span>⬛ Space / Jump btn</span><span>Jump</span><span>🎭 E / Morph btn</span><span>Transform</span><span>📣 T / Taunt btn</span><span>Taunt (+coins!)</span>`;}
 }
 
-// ── YAHAN RENDERER AUR LIGHTING KO REALISTIC BANA DIYA HAI ──
 const renderer=new THREE.WebGLRenderer({antialias:true, powerPreference:'high-performance'}); 
 renderer.setPixelRatio(Math.min(window.devicePixelRatio,1.5));
 renderer.setSize(window.innerWidth,window.innerHeight);
 renderer.shadowMap.enabled=true;
-renderer.shadowMap.type=THREE.PCFSoftShadowMap; // HD soft shadows
-renderer.outputColorSpace = THREE.SRGBColorSpace; // Real vibrant colors
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace; 
 
 document.body.insertBefore(renderer.domElement,document.body.firstChild);
 
@@ -224,11 +222,11 @@ const camera=new THREE.PerspectiveCamera(70,window.innerWidth/window.innerHeight
 camera.position.set(0,5,8);
 window.addEventListener('resize',()=>{renderer.setSize(window.innerWidth,window.innerHeight);camera.aspect=window.innerWidth/window.innerHeight;camera.updateProjectionMatrix();});
 
-scene.add(new THREE.AmbientLight(0xffffff, 1.2)); // Brightness badhai
-const dL=new THREE.DirectionalLight(0xffffff, 1.5); // Sun light badhai
+scene.add(new THREE.AmbientLight(0xffffff, 1.2)); 
+const dL=new THREE.DirectionalLight(0xffffff, 1.5); 
 dL.position.set(10, 20, 10);
 dL.castShadow=true;
-dL.shadow.mapSize.set(2048, 2048); // High quality shadows
+dL.shadow.mapSize.set(2048, 2048); 
 scene.add(dL);
 const dL2=new THREE.DirectionalLight(0xffffff, 0.5);
 dL2.position.set(-8,8,-8);
@@ -239,7 +237,37 @@ const MAP_HALF=19,WALL_H=4.5,GRAV=-18,PLAYER_SPEED=6,PROP_SPEED=2.8,JUMP_VEL=8;
 function box(w,h,d,color,opts={}){return new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshLambertMaterial({color,...opts}));}
 function cyl(rt,rb,h,seg,color,opts={}){return new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg),new THREE.MeshLambertMaterial({color,...opts}));}
 function sph(r,color,opts={}){return new THREE.Mesh(new THREE.SphereGeometry(r,8,6),new THREE.MeshLambertMaterial({color,...opts}));}
-function setShadow(o){o.traverse(c=>{if(c.isMesh){c.castShadow=true;c.receiveShadow=true;}});return o;}
+
+// ─── CHARACTER LOADING LOGIC ───
+let basePlayerModel = null;
+let playerAnimations = [];
+let playerMixer = null;
+let currentAction = null;
+
+function loadCharacterModel() {
+  const loader = new GLTFLoader();
+  const charUrl = 'luoli_run.glb'; // 👈 Tumhara naya anime character
+
+  loader.load(charUrl, function (gltf) {
+    basePlayerModel = gltf.scene;
+    playerAnimations = gltf.animations;
+
+    // Character ke bounding box ke hisaab se height 92 thi, isliye usko scale down karke 1.5 unit tall kiya hai
+    basePlayerModel.scale.set(0.015, 0.015, 0.015);
+
+    basePlayerModel.traverse((node) => {
+      if (node.isMesh) {
+        node.castShadow = true;
+        node.receiveShadow = true;
+      }
+    });
+    console.log("Player Character Loaded!");
+  }, 
+  undefined, 
+  function (error) {
+    console.error('Error loading Character:', error);
+  });
+}
 
 // ─── CUSTOM MAP LOADING LOGIC ───
 let customMapModel = null;
@@ -251,28 +279,18 @@ function loadCustomMap(){
     customMapModel = gltf.scene;
     customMapModel.scale.set(1, 1, 1); 
     customMapModel.position.set(0, 0, 0);
-
     customMapModel.traverse((node) => {
       if (node.isMesh) {
         node.castShadow = true;
         node.receiveShadow = true;
       }
     });
-
     scene.add(customMapModel);
     console.log("Custom Map Loaded Successfully!");
-  }, 
-  undefined, 
-  function (error) {
-    console.error('Error loading Map, using fallback ground:', error);
-    const ground=box(MAP_HALF*4,0.1,MAP_HALF*4,0x557a46); 
-    ground.position.y=-0.05;
-    ground.receiveShadow=true;
-    scene.add(ground);
   });
 }
 
-// ─── NEW TREE LOADING LOGIC (Size adjusted) ───
+// ─── NEW TREE LOADING LOGIC ───
 let treeModel = null;
 function loadTrees(){
   const loader = new GLTFLoader();
@@ -280,7 +298,6 @@ function loadTrees(){
 
   loader.load(treeUrl, function (gltf) {
     treeModel = gltf.scene;
-    
     treeModel.traverse((node) => {
       if (node.isMesh) {
         node.castShadow = true;
@@ -288,27 +305,14 @@ function loadTrees(){
       }
     });
 
-    const treePositions = [
-      [5, 0, 5],
-      [-8, 0, 12],
-      [10, 0, -10],
-      [-12, 0, -8],
-      [0, 0, -15]
-    ];
-
+    const treePositions = [ [5, 0, 5], [-8, 0, 12], [10, 0, -10], [-12, 0, -8], [0, 0, -15] ];
     treePositions.forEach(pos => {
       const treeClone = treeModel.clone();
-      // YAHAN SCALE KO 1 SE 0.002 KAR DIYA HAI TAAKI PED GIANT NA LAGE!
       treeClone.scale.set(0.002, 0.002, 0.002); 
       treeClone.position.set(pos[0], pos[1], pos[2]);
       scene.add(treeClone);
     });
-
     console.log("PSX Birch Trees Loaded Successfully!");
-  }, 
-  undefined, 
-  function (error) {
-    console.error('Error loading Trees:', error);
   });
 }
 
@@ -370,19 +374,40 @@ const player={pos:new THREE.Vector3(0,1,0),vel:new THREE.Vector3(),onGround:fals
 let playerMesh=null,transformedMesh=null,transformedDot=null;
 
 function buildPlayerMesh(role){
-  if(playerMesh)scene.remove(playerMesh);
-  const g=new THREE.Group();
-  const bc=role==='hider'?0x4ecdc4:0xff6b35,lc=role==='hider'?0x1a237e:0xb71c1c;
-  const body=box(.5,.7,.3,bc);body.position.y=.4;body.castShadow=true;g.add(body);
-  const head=box(.4,.4,.4,0xf8e1c8);head.position.y=1.05;head.castShadow=true;g.add(head);
-  const eL=box(.08,.08,.02,role==='seeker'?0xff0000:0x1a1a2e);eL.position.set(-.1,1.08,.21);g.add(eL);
-  const eR=box(.08,.08,.02,role==='seeker'?0xff0000:0x1a1a2e);eR.position.set(.1,1.08,.21);g.add(eR);
-  const lL=box(.2,.5,.25,lc);lL.position.set(-.13,-.1,0);lL.castShadow=true;g.add(lL);
-  const lR=box(.2,.5,.25,lc);lR.position.set(.13,-.1,0);lR.castShadow=true;g.add(lR);
-  const aL=box(.15,.55,.2,bc);aL.position.set(-.35,.35,0);aL.castShadow=true;g.add(aL);
-  const aR=box(.15,.55,.2,bc);aR.position.set(.35,.35,0);aR.castShadow=true;g.add(aR);
-  if(role==='seeker'){const gun=box(.1,.1,.5,0x333333);gun.position.set(.35,.35,-.28);g.add(gun);}
-  playerMesh=g;scene.add(g);
+  if(playerMesh) scene.remove(playerMesh);
+  
+  playerMesh = new THREE.Group();
+
+  if(basePlayerModel) {
+    // Apne character ko Group mein add kiya
+    basePlayerModel.position.y = -0.5; // Taaki paer zameen par rahein
+    basePlayerModel.rotation.y = Math.PI; // Character aage dekhega
+    playerMesh.add(basePlayerModel);
+
+    // Animation setup (Agar running animation hai file mein)
+    if(playerAnimations.length > 0) {
+      playerMixer = new THREE.AnimationMixer(basePlayerModel);
+      currentAction = playerMixer.clipAction(playerAnimations[0]);
+      currentAction.play();
+      currentAction.paused = true; // By default pause rahega jab khada ho
+    }
+
+    if(role === 'seeker'){
+      const ind = sph(0.2, 0xff0000, {emissive: 0xff0000});
+      ind.position.y = 1.6;
+      playerMesh.add(ind);
+    }
+  } else {
+    // Agar character load na ho paye toh fallback dabbe wala
+    const g=new THREE.Group();
+    const bc=role==='hider'?0x4ecdc4:0xff6b35,lc=role==='hider'?0x1a237e:0xb71c1c;
+    const body=box(.5,.7,.3,bc);body.position.y=.4;body.castShadow=true;g.add(body);
+    const head=box(.4,.4,.4,0xf8e1c8);head.position.y=1.05;head.castShadow=true;g.add(head);
+    if(role==='seeker'){const gun=box(.1,.1,.5,0x333333);gun.position.set(.35,.35,-.28);g.add(gun);}
+    playerMesh.add(g);
+  }
+  
+  scene.add(playerMesh);
 }
 
 function applyTransform(propType){
@@ -744,6 +769,20 @@ function gameLoop() {
       if(Math.abs(mx) > .01 || Math.abs(mz) > .01)
         playerMesh.rotation.y = player.yaw;
     }
+    
+    // ── ANIMATION UPDATE LOGIC ──
+    if (playerMixer) {
+      playerMixer.update(dt);
+      if (currentAction) {
+        // Agar player chal raha hai, toh animation play karo, warna pause kardo
+        if (Math.abs(mx) > 0.01 || Math.abs(mz) > 0.01 || !player.onGround) {
+          currentAction.paused = false;
+        } else {
+          currentAction.paused = true;
+        }
+      }
+    }
+
     if(transformedMesh) {
       transformedMesh.position.copy(player.pos);
       if(Math.abs(mx) > .01 || Math.abs(mz) > .01)
@@ -772,8 +811,10 @@ function gameLoop() {
   renderer.render(scene, camera);
 }
 
+// Map, Trees aur Character Load kiya!
 loadCustomMap();
 loadTrees();  
+loadCharacterModel(); // 👈 Tumhara naya anime character
 buildProps();
 gameLoop();
 
